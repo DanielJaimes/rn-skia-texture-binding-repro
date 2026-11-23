@@ -1,0 +1,19 @@
+diff --git a/node_modules/@shopify/react-native-skia/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp b/node_modules/@shopify/react-native-skia/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp
+--- a/node_modules/@shopify/react-native-skia/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp
++++ b/node_modules/@shopify/react-native-skia/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp
+@@ -61,6 +61,15 @@
+             "can safely be ignored");
+         env->ExceptionClear();
+       }
++
++      // updateTexImage() binds the SurfaceTexture's texture to
++      // GL_TEXTURE_EXTERNAL_OES on the current context, behind Ganesh's
++      // texture binding cache. Without this reset, re-drawing an already
++      // imported external image (e.g. from MakeImageFromNativeBuffer) hits the
++      // stale cache, skips glBindTexture and samples the wrong texture.
++      if (auto *context = OpenGLContext::getInstance().getDirectContext()) {
++        context->resetContext(kTextureBinding_GrGLBackendState);
++      }
+     }
+     if (surface) {
+       // Draw into canvas using callback
