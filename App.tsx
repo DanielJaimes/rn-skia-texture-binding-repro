@@ -1,32 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { NativeModules, Pressable, Text, View } from 'react-native';
-import { Canvas, Circle, ColorMatrix, Image, Skia, type SkImage } from '@shopify/react-native-skia';
+import { Pressable, Text, View } from 'react-native';
+import { Canvas, Circle, Image, Skia, type SkImage } from '@shopify/react-native-skia';
 import { runOnUI, useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated';
 
-// 'gpu' = AHardwareBuffer filled on the GPU (native helper), 'cpu' = same flags, filled on the CPU,
-// 'skia' = Skia.NativeBuffer.MakeTestBuffer
-const KIND: 'gpu' | 'cpu' | 'skia' = 'gpu';
-// Start the app directly in the case under test: once a TextureView canvas has rendered, Ganesh's
-// texture-binding state stays stale even after switching to an opaque canvas.
-const INITIAL: Case = 'a';
 type Case = 'a' | 'b' | 'c'; // a: canvas A (TextureView) | b: A opaque | c: A opaque + animated canvas B
-const ID = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
+// Start the app directly in the case under test (cold start): the binding cache is per context, so after any
+// TextureView render an opaque canvas that re-draws the same image is affected too.
+const INITIAL: Case = 'a';
 
 export default function App() {
   const [c, setC] = useState<Case>(INITIAL);
   const image = useSharedValue<SkImage | null>(null);
   const t = useSharedValue(0);
   useEffect(() => {
-    (async () => {
-      const [hi, lo] = KIND === 'skia' ? [0, 0] : await NativeModules.RBHelper.make(KIND);
-      // The image must be imported on the UI runtime (OpenGLContext is thread_local).
-      runOnUI(() => {
-        'worklet';
-        const ptr = KIND === 'skia'
-          ? Skia.NativeBuffer.MakeTestBuffer(512, 512)
-          : BigInt(hi) * BigInt(4294967296) + BigInt(lo);
-        image.value = Skia.Image.MakeImageFromNativeBuffer(ptr);
-      })();
+    // The image must be imported on the UI runtime (OpenGLContext is thread_local).
+    runOnUI(() => {
+      'worklet';
+      const buffer = Skia.NativeBuffer.MakeTestBuffer(512, 512); // RGBA8 AHardwareBuffer, bright test pattern
+      image.value = Skia.Image.MakeImageFromNativeBuffer(buffer);
     })();
   }, [image]);
   useFrameCallback(() => { t.value += 1; });
@@ -44,9 +35,7 @@ export default function App() {
       </View>
       {/* Canvas A re-draws the same imported image every frame (the circle forces the redraw). */}
       <Canvas key={c} opaque={c !== 'a'} style={{ width: 300, height: 300 }}>
-        <Image image={image} x={0} y={0} width={300} height={300} fit="fill">
-          <ColorMatrix matrix={ID} />
-        </Image>
+        <Image image={image} x={0} y={0} width={300} height={300} fit="fill" />
         <Circle cx={cx} cy={20} r={10} color="white" />
       </Canvas>
       {c === 'c' && (
